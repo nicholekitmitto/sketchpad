@@ -1,0 +1,28 @@
+@use 'variables' as *;
+@use 'main';
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: $bg;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+button {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: $pink;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-family: $font;
+  font-size: 13px;
+  letter-spacing: $letter-spacing;
+  cursor: pointer;
+
+  &:hover { background: $pink-hover; }
+}

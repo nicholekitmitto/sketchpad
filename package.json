@@ -1,6 +1,12 @@
 {
   "name": "p5js-stuff",
   "scripts": {
-    "start": "npx serve ."
+    "start": "npx serve .",
+    "dev": "npm run build && npx serve .",
+    "sass": "sass --watch styles/sketch.scss:css/sketch.css styles/main.scss:css/main.css",
+    "build": "sass styles/sketch.scss:css/sketch.css styles/main.scss:css/main.css"
+  },
+  "devDependencies": {
+    "sass": "^1.99.0"
   }
 }

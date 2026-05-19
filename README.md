@@ -15,5 +15,5 @@ Each sketch lives in its own folder and can be opened directly in the browser. C
 ## running locally
 
 ```bash
-npx serve .
+npm run dev
 ```
