@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Literary Currents</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        background: #050814;
+        overflow: hidden;
+        font-family: monospace;
+      }
+
+      canvas { display: block; max-height: 100vh; }
+
+      /* ── Back button ───────────────────────────────── */
+      .btn-back {
+        position: fixed;
+        top: 24px;
+        left: 290px; /* clear of legend panel */
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        color: rgba(160, 175, 255, 0.35);
+        text-decoration: none;
+        z-index: 20;
+        transition: color 0.25s;
+      }
+      .btn-back:hover { color: rgba(200, 215, 255, 0.75); }
+
+      /* ── Keyboard hint ─────────────────────────────── */
+      .hint {
+        position: fixed;
+        bottom: 24px;
+        right: 28px;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        color: rgba(160, 175, 255, 0.20);
+        line-height: 1.9;
+        text-align: right;
+        pointer-events: none;
+        z-index: 20;
+      }
+
+      /* ── Legend panel ──────────────────────────────── */
+      .legend {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 256px;
+        height: 100vh;
+        background: rgba(6, 8, 22, 0.86);
+        border-right: 1px solid rgba(120, 140, 255, 0.10);
+        padding: 36px 28px 36px 28px;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+      .legend::-webkit-scrollbar { width: 4px; }
+      .legend::-webkit-scrollbar-track { background: transparent; }
+      .legend::-webkit-scrollbar-thumb { background: rgba(120,140,255,0.18); border-radius: 2px; }
+
+      /* ── Book title tooltip ────────────────────────────── */
+      #book-tooltip {
+        position: fixed;
+        display: none;
+        font-family: monospace;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        color: rgba(210, 220, 255, 0.92);
+        background: rgba(4, 6, 20, 0.90);
+        border: 1px solid rgba(120, 140, 255, 0.15);
+        border-left: 3px solid rgba(120, 140, 255, 0.5);
+        padding: 6px 12px;
+        pointer-events: none;
+        z-index: 30;
+        white-space: nowrap;
+      }
+
+      .legend-title {
+        font-size: 17px;
+        font-weight: normal;
+        letter-spacing: 0.04em;
+        line-height: 1.35;
+        color: rgba(220, 228, 255, 0.92);
+        margin-bottom: 6px;
+      }
+
+      .legend-sub {
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        color: rgba(140, 155, 220, 0.50);
+        text-transform: uppercase;
+        margin-bottom: 26px;
+      }
+
+      .legend-divider {
+        height: 1px;
+        background: rgba(120, 140, 255, 0.12);
+        margin: 16px 0;
+      }
+
+      .legend-section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .legend-heading {
+        font-size: 9px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: rgba(120, 140, 220, 0.45);
+        margin-bottom: 2px;
+      }
+
+      .legend-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .legend-swatch {
+        flex-shrink: 0;
+        width: 42px;
+        height: 14px;
+        display: flex;
+        align-items: center;
+      }
+
+      .legend-swatch svg {
+        display: block;
+      }
+
+      .legend-text {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+
+      .legend-label {
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        color: rgba(200, 212, 255, 0.80);
+        line-height: 1.3;
+      }
+
+      .legend-desc {
+        font-size: 10px;
+        letter-spacing: 0.03em;
+        color: rgba(130, 148, 210, 0.55);
+        line-height: 1.3;
+      }
+
+      /* ── Genre dot list ───────────────────────────────── */
+      .genre-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 8px;
+        padding-left: 54px;
+      }
+      .genre-line {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .gdot {
+        flex-shrink: 0;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        opacity: 0.80;
+      }
+      .gname {
+        font-size: 9.5px;
+        letter-spacing: 0.04em;
+        color: rgba(170, 185, 235, 0.68);
+        white-space: nowrap;
+      }
+
+      /* ── Stats panel ──────────────────────────────────── */
+      #stats-content {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .stat-row {
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        color: rgba(140, 155, 220, 0.55);
+        line-height: 1.7;
+      }
+      .stat-n {
+        font-size: 15px;
+        color: rgba(200, 215, 255, 0.88);
+        letter-spacing: 0.02em;
+      }
+    </style>
+  </head>
+  <body>
+    <a class="btn-back" href="../">← sketches</a>
+
+    <!-- ── Legend ──────────────────────────────────────────── -->
+    <aside class="legend">
+      <div class="legend-title">Literary Currents</div>
+      <div class="legend-sub">a flow field of my recent reading history</div>
+
+      <!-- Placement -->
+      <div class="legend-section">
+        <div class="legend-heading">Placement</div>
+
+        <div class="legend-row">
+          <div class="legend-swatch">
+            <svg width="42" height="14" viewBox="0 0 42 14" fill="none">
+              <line x1="4" y1="7" x2="38" y2="7" stroke="rgba(180,195,255,0.45)" stroke-width="1"/>
+              <text x="2" y="11" font-family="monospace" font-size="7" fill="rgba(180,195,255,0.45)">←</text>
+              <text x="33" y="11" font-family="monospace" font-size="7" fill="rgba(180,195,255,0.45)">→</text>
+            </svg>
+          </div>
+          <div class="legend-text">
+            <span class="legend-label">left → right</span>
+            <span class="legend-desc">year I read it</span>
+          </div>
+        </div>
+
+        <div class="legend-row">
+          <div class="legend-swatch">
+            <svg width="42" height="14" viewBox="0 0 42 14" fill="none">
+              <line x1="21" y1="2" x2="21" y2="12" stroke="rgba(180,195,255,0.45)" stroke-width="1"/>
+              <text x="18" y="6" font-family="monospace" font-size="7" fill="rgba(180,195,255,0.45)">↑</text>
+              <text x="18" y="14" font-family="monospace" font-size="7" fill="rgba(180,195,255,0.45)">↓</text>
+            </svg>
+          </div>
+          <div class="legend-text">
+            <span class="legend-label">top → bottom</span>
+            <span class="legend-desc">genre family</span>
+          </div>
+        </div>
+
+        <!-- Genre dot key — ordered top-to-bottom as on canvas -->
+        <div class="genre-stack">
+          <div class="genre-line"><span class="gdot" style="background:hsl(315,88%,66%)"></span><span class="gname">Romance</span></div>
+          <div class="genre-line"><span class="gdot" style="background:hsl(258,76%,59%)"></span><span class="gname">Dark Fantasy</span></div>
+          <div class="genre-line"><span class="gdot" style="background:hsl(265,80%,64%)"></span><span class="gname">Urban Fantasy</span></div>
+          <div class="genre-line"><span class="gdot" style="background:hsl(268,86%,64%)"></span><span class="gname">Fantasy</span></div>
+          <div class="genre-line"><span class="gdot" style="background:hsl(278,82%,66%)"></span><span class="gname">Epic Fantasy</span></div>
+          <div class="genre-line"><span class="gdot" style="background:hsl(202,90%,61%)"></span><span class="gname">Sci-Fi</span></div>
+          <div class="genre-line"><span class="gdot" style="background:hsl(208,82%,61%)"></span><span class="gname">Sci-Fi Thriller</span></div>
+          <div class="genre-line"><span class="gdot" style="background:hsl(214,79%,62%)"></span><span class="gname">Sci-Fi Dystopian</span></div>
+          <div class="genre-line"><span class="gdot" style="background:hsl(196,87%,62%)"></span><span class="gname">Hard Sci-Fi</span></div>
+        </div>
+      </div>
+
+      <div class="legend-divider"></div>
+
+      <!-- Line qualities -->
+      <div class="legend-section">
+        <div class="legend-heading">Line Qualities</div>
+
+        <!-- Brightness: bright vs dim line -->
+        <div class="legend-row">
+          <div class="legend-swatch">
+            <svg width="42" height="14" viewBox="0 0 42 14" fill="none">
+              <path d="M3 10 Q21 4 39 10" stroke="rgba(255,255,255,0.88)" stroke-width="1.4"/>
+              <path d="M3 13 Q21 8 39 13" stroke="rgba(140,160,230,0.35)" stroke-width="0.9"/>
+            </svg>
+          </div>
+          <div class="legend-text">
+            <span class="legend-label">brightness &amp; glow</span>
+            <span class="legend-desc">your star rating</span>
+          </div>
+        </div>
+
+        <!-- Trail length: long vs short -->
+        <div class="legend-row">
+          <div class="legend-swatch">
+            <svg width="42" height="14" viewBox="0 0 42 14" fill="none">
+              <path d="M3 7 Q21 3 39 7" stroke="rgba(200,215,255,0.65)" stroke-width="1.1"/>
+              <path d="M16 11 Q24 8 32 11" stroke="rgba(200,215,255,0.65)" stroke-width="1.1"/>
+            </svg>
+          </div>
+          <div class="legend-text">
+            <span class="legend-label">trail length</span>
+            <span class="legend-desc">page count</span>
+          </div>
+        </div>
+
+        <!-- Color: hue spectrum -->
+        <div class="legend-row">
+          <div class="legend-swatch">
+            <svg width="42" height="14" viewBox="0 0 42 14" fill="none">
+              <path d="M3 9 Q10 5 21 7 Q32 9 39 5" stroke="rgba(160,200,255,0.7)" stroke-width="1.1"/>
+              <path d="M3 11 Q10 7 21 9 Q32 11 39 7" stroke="rgba(200,175,255,0.5)" stroke-width="1.0"/>
+            </svg>
+          </div>
+          <div class="legend-text">
+            <span class="legend-label">color tint</span>
+            <span class="legend-desc">genre family</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend-divider"></div>
+
+      <!-- Field behavior -->
+      <div class="legend-section">
+        <div class="legend-heading">Field Behavior</div>
+
+        <!-- Vortex: spiral -->
+        <div class="legend-row">
+          <div class="legend-swatch">
+            <svg width="42" height="14" viewBox="0 0 42 14" fill="none">
+              <path d="M21 7 Q24 3 27 7 Q24 11 18 8 Q14 4 19 3 Q26 1 31 7 Q29 13 21 12" stroke="rgba(200,215,255,0.60)" stroke-width="1.0" fill="none"/>
+            </svg>
+          </div>
+          <div class="legend-text">
+            <span class="legend-label">vortex spiral</span>
+            <span class="legend-desc">high star rating</span>
+          </div>
+        </div>
+
+        <!-- Turbulence: choppy lines -->
+        <div class="legend-row">
+          <div class="legend-swatch">
+            <svg width="42" height="14" viewBox="0 0 42 14" fill="none">
+              <path d="M3 8 Q8 4 13 9 Q18 13 23 7 Q28 2 33 8 Q36 11 39 7" stroke="rgba(200,215,255,0.55)" stroke-width="1.0" fill="none"/>
+            </svg>
+          </div>
+          <div class="legend-text">
+            <span class="legend-label">field turbulence</span>
+            <span class="legend-desc">emotional intensity</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend-divider"></div>
+
+      <!-- DNF -->
+      <div class="legend-section">
+        <div class="legend-row">
+          <div class="legend-swatch">
+            <svg width="42" height="14" viewBox="0 0 42 14" fill="none">
+              <path d="M3 7 Q21 3 39 7" stroke="rgba(180,195,255,0.55)" stroke-width="1.0" stroke-dasharray="5,4" fill="none"/>
+            </svg>
+          </div>
+          <div class="legend-text">
+            <span class="legend-label">dashed trail</span>
+            <span class="legend-desc">did not finish (DNF)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend-divider"></div>
+
+      <!-- Stats — populated by updateStatsPanel() in sketch.js -->
+      <div class="legend-section">
+        <div class="legend-heading">By the Numbers</div>
+        <div id="stats-content">
+          <div class="legend-desc">loading…</div>
+        </div>
+      </div>
+    </aside>
+
+    <div id="book-tooltip"></div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.0/lib/p5.min.js"></script>
+    <script src="books.js"></script>
+    <script src="sketch.js"></script>
+  </body>
+</html>
