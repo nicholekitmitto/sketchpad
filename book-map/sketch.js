@@ -197,14 +197,18 @@ function processBooks() {
   const yearMax = Math.max(...raw.map(b => b.year));
 
   processedBooks = raw.map(b => {
-    // x: year column with small jitter so same-year books naturally overlap neighbours
+    // x: year column with small jitter; xOverride (0–1) pins a specific book's x position
     const nxBase = (yearMin === yearMax) ? 0.5
                  : map(b.year, yearMin, yearMax, 270 / width, (width - 200) / width);
     const nxJitter = ((djb2(b.title + "x") % 2000) / 2000 - 0.72) * 60 / width;
-    const nx = constrain(nxBase + nxJitter, 270 / width, (width - 200) / width);
+    const nx = b.xOverride !== undefined
+      ? constrain(b.xOverride, 270 / width, (width - 200) / width)
+      : constrain(nxBase + nxJitter, 270 / width, (width - 200) / width);
 
-    // y: deterministic hash-based scatter — organic spread with no data meaning
-    const ny = map((djb2(b.title + "y") % 10000), 0, 9999, 100 / height, (height - 50) / height);
+    // y: deterministic hash-based scatter; yOverride (0–1) pins a specific book's position
+    const ny = b.yOverride !== undefined
+      ? constrain(b.yOverride, 100 / height, (height - 50) / height)
+      : map((djb2(b.title + "y") % 10000), 0, 9999, 100 / height, (height - 50) / height);
 
     const col   = getGenreColor(b.genre);
     const isDNF = b.finished === false;
@@ -217,7 +221,7 @@ function processBooks() {
       nx, ny, col, isDNF,
       rawRating:       b.rating,
       pages:           b.pages || 300,
-      attractStrength: isDNF ? 0 : ratingToStrength(rating),
+      attractStrength: isDNF ? .62 : ratingToStrength(rating),
       turbulence:      map(b.emotionalIntensity ?? 3, 1, 5, 0.0, isDNF ? 0.55 : 1.0),
       alpha:           isDNF ? 42 : map(rating, 1, 5, 14, 98),
       isFavorite:      b.rating === 5,
@@ -301,7 +305,7 @@ class FlowField {
         bx: b.nx * width,  by: b.ny * height,
         aRad, aRad2: aRad * aRad,
         tRad, tRad2: tRad * tRad,
-        aStr: b.attractStrength * (b.isFavorite ? 1.5 : 1.0),
+        aStr: b.attractStrength * (b.isFavorite ? 1.6 : 1.0),
         turb: b.turbulence,
         nx: b.nx, ny: b.ny,
       };
@@ -455,7 +459,7 @@ function buildBookBundles(ff) {
     const spread   = map(b.pages, 80, 900, CFG.bundleSpreadMin, CFG.bundleSpreadMax, true) * (b.isFavorite ? 1.5 : 1.0);
     const pageT     = Math.sqrt(constrain(map(b.pages, 80, 900, 0, 1), 0, 1));
     const stepsBase = Math.round(CFG.bookStepsMin + pageT * (CFG.bookStepsMax - CFG.bookStepsMin));
-    const steps     = b.pages >= maxPages ? Math.round(stepsBase * 2.8) : stepsBase;
+    const steps     = b.pages >= maxPages ? Math.round(stepsBase * 1) : stepsBase;
     const jitterStr = b.turbulence;
     const bookSeed  = djb2(b.title) % 1000;
 
@@ -662,10 +666,10 @@ function render() {
     const h = path[0];
     noFill();
     if (isFavorite) {
-      stroke(col.h, 8, 100, 28);
+      stroke(44, 70, 100, 28);
       strokeWeight(16);
       point(h.x, h.y);
-      stroke(col.h, 18, 100, 52);
+      stroke(42, 88, 100, 52);
       strokeWeight(9);
       point(h.x, h.y);
       stroke(0, 0, 100, 92);

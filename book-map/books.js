@@ -19,6 +19,7 @@ const MY_BOOKS = [
     rating: 5,
     pages: 575,
     emotionalIntensity: 5,
+    yOverride: 0.4,
     year: 2026,
   },
   {
@@ -188,7 +189,9 @@ const MY_BOOKS = [
     genre: "Contemporary Romance",
     rating: 5,
     pages: 383,
-    emotionalIntensity: 2,
+    emotionalIntensity: 5,
+    xOverride: 0.3,
+    yOverride: 0.35,
     year: 2021,
   },
   {
@@ -221,6 +224,8 @@ const MY_BOOKS = [
     rating: 5,
     pages: 681,
     emotionalIntensity: 5,
+    yOverride: 0.33,
+    xOverride: 0.32,
     year: 2021,
   },
   {
@@ -270,6 +275,8 @@ const MY_BOOKS = [
     rating: 1,
     pages: 480,
     emotionalIntensity: 1,
+    yOverride: 0.6,
+    xOverride: 0.3,
     year: 2021,
     finished: false,
   },
@@ -303,6 +310,7 @@ const MY_BOOKS = [
     rating: 5,
     pages: 45,
     emotionalIntensity: 3,
+    xOverride: 0.3,
     year: 2021,
   },
   {
@@ -352,6 +360,7 @@ const MY_BOOKS = [
     pages: 448,
     emotionalIntensity: 5,
     year: 2021,
+    yOverride: 0.5,
   },
   {
     title: "From Blood and Ash",
@@ -364,7 +373,7 @@ const MY_BOOKS = [
   {
     title: "Serpent & Dove",
     genre: "Fantasy Romance",
-    rating: 5,
+    rating: 3,
     pages: 513,
     emotionalIntensity: 3,
     year: 2021,
@@ -391,6 +400,8 @@ const MY_BOOKS = [
     rating: 5,
     pages: 419,
     emotionalIntensity: 5,
+    yOverride: 0.15,
+    xOverride: 0.3,
     year: 2021,
   },
   {
@@ -399,6 +410,7 @@ const MY_BOOKS = [
     rating: 5,
     pages: 803,
     emotionalIntensity: 5,
+    yOverride: 0.55,
     year: 2020,
   },
   {
@@ -416,6 +428,7 @@ const MY_BOOKS = [
     pages: 342,
     emotionalIntensity: 5,
     year: 2020,
+    yOverride: 0.20,
   },
   {
     title: "Seveneves",
@@ -424,6 +437,7 @@ const MY_BOOKS = [
     pages: 872,
     emotionalIntensity: 4,
     year: 2020,
+    yOverride: 0.72,
   },
   {
     title: "Recursion",
@@ -441,6 +455,7 @@ const MY_BOOKS = [
     emotionalIntensity: 1,
     year: 2025,
     finished: false,
+    yOverride: 0.3,
   },
   {
     title: "Credence",
@@ -475,6 +490,7 @@ const MY_BOOKS = [
     rating: 2,
     pages: 645,
     emotionalIntensity: 1,
+    yOverride: 0.3,
     year: 2021,
     finished: false,
   },
@@ -508,6 +524,7 @@ const MY_BOOKS = [
     rating: 5,
     pages: 428,
     emotionalIntensity: 4,
+    yOverride: 0.75,
     year: 2026,
   },
   {
