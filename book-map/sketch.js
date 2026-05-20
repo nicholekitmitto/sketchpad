@@ -17,7 +17,7 @@
 //    pages              → trail length
 //    finished: false    → dashed trail, no head glow
 //
-//  R = regenerate  |  S = save PNG
+//  S = save PNG
 // ============================================================
 
 const CFG = {
@@ -26,13 +26,13 @@ const CFG = {
   numAmbient:    600,   // faint background streamlines for texture
   ambientSteps:  90,    // steps per ambient line
   ambientAlpha:  9,     // very low opacity — ambient layer is just scenery
-  bookStepsMin:  55,    // shortest book line (~80-page books)
-  bookStepsMax:  200,   // longest book line (~900-page books)
+  bookStepsMin:  110,   // shortest book line (~80-page books)
+  bookStepsMax:  420,   // longest book line (~900-page books)
   bundleLinesMin: 8,    // lines per bundle for short books
   bundleLinesMax: 22,   // lines per bundle for long books
-  bundleSpreadMin: 6,   // perpendicular ribbon width (px) for short books
-  bundleSpreadMax: 28,  // perpendicular ribbon width (px) for long books
-  baseSpeed:     1.6,
+  bundleSpreadMin: 3,   // perpendicular ribbon width (px) for short books
+  bundleSpreadMax: 14,  // perpendicular ribbon width (px) for long books
+  baseSpeed:     2.1,
   attractRadius: 200,
   turbRadius:    155,
   bookWeight:    1.4,   // slightly thinner — many lines per bundle
@@ -64,6 +64,8 @@ const GENRE_COLORS = {
   "Hard Sci-Fi":          { h: 196, s: 70, b: 95 },
   "Sci-Fi Thriller":      { h: 208, s: 68, b: 93 },
   "Sci-Fi Dystopian":     { h: 214, s: 65, b: 92 },
+
+  "Dark Academia":        { h: 38,  s: 65, b: 82 },
 
   "Horror":               { h: 245, s: 72, b: 88 },
   "Mystery":              { h: 220, s: 68, b: 90 },
@@ -97,6 +99,7 @@ function getGenreColor(genre) {
   if (g.includes("sci-fi thriller")) return GENRE_COLORS["Sci-Fi Thriller"];
   if (g.includes("dystopian"))       return GENRE_COLORS["Sci-Fi Dystopian"];
   if (g.includes("sci-fi") || g.includes("scifi") || g.includes("science fiction")) return GENRE_COLORS["Sci-Fi"];
+  if (g.includes("dark academia"))    return GENRE_COLORS["Dark Academia"];
   if (g.includes("horror"))          return GENRE_COLORS["Horror"];
   if (g.includes("thriller"))        return GENRE_COLORS["Thriller"];
   if (g.includes("mystery"))         return GENRE_COLORS["Mystery"];
@@ -104,7 +107,7 @@ function getGenreColor(genre) {
   return GENRE_COLORS["default"];
 }
 
-// All romance sub-genres collapse to "Romance" for canvas labels.
+
 function getGenreFamily(genre) {
   const g = (genre || "").toLowerCase();
   if (g.includes("romance"))                                     return "Romance";
@@ -194,9 +197,9 @@ function processBooks() {
   processedBooks = raw.map(b => {
     // x: year column with small jitter so same-year books naturally overlap neighbours
     const nxBase = (yearMin === yearMax) ? 0.5
-                 : map(b.year, yearMin, yearMax, 270 / width, (width - 40) / width);
+                 : map(b.year, yearMin, yearMax, 270 / width, (width - 200) / width);
     const nxJitter = ((djb2(b.title + "x") % 2000) / 2000 - 0.5) * 60 / width;
-    const nx = constrain(nxBase + nxJitter, 270 / width, (width - 40) / width);
+    const nx = constrain(nxBase + nxJitter, 270 / width, (width - 200) / width);
 
     // y: deterministic hash-based scatter — organic spread with no data meaning
     const ny = map((djb2(b.title + "y") % 10000), 0, 9999, 100 / height, (height - 50) / height);
@@ -208,15 +211,15 @@ function processBooks() {
     return {
       title:           b.title,
       genre:           b.genre,
+      year:            b.year,
       nx, ny, col, isDNF,
       rawRating:       b.rating,
       pages:           b.pages || 300,
       attractStrength: isDNF ? 0 : ratingToStrength(rating),
       turbulence:      map(b.emotionalIntensity ?? 3, 1, 5, 0.0, isDNF ? 0.55 : 1.0),
-      alpha:           isDNF ? 25 : map(rating, 1, 5, 30, 80),
+      alpha:           isDNF ? 42 : map(rating, 1, 5, 14, 98),
     };
   });
-
   updateStatsPanel();
 }
 
@@ -293,13 +296,13 @@ class FlowField {
           if (bc_i.aStr > 0 && d2 < bc_i.aRad2 && d2 > 1) {
             const dst = Math.sqrt(d2);
             const falloff = (1 - dst / bc_i.aRad) ** 2;
-            angle = lerp(angle, Math.atan2(dy, dx) + HALF_PI, bc_i.aStr * falloff * 0.70);
+            angle = lerp(angle, Math.atan2(dy, dx) + HALF_PI, bc_i.aStr * falloff * 0.92);
           }
           if (bc_i.turb > 0.12 && d2 < bc_i.tRad2) {
             const dst = Math.sqrt(d2);
             const falloff = 1 - dst / bc_i.tRad;
             angle += noise(px * s * 4.5 + bc_i.nx * 35, py * s * 4.5 + bc_i.ny * 35, t * 2.8)
-                     * bc_i.turb * PI * falloff * falloff * 1.6;
+                     * bc_i.turb * PI * falloff * falloff * 3.2;
           }
         }
         this.angles[row * this.cols + col] = angle;
@@ -316,7 +319,7 @@ class FlowField {
 
 // ── Ambient layer (background texture) ───────────────────────
 
-const CONTENT_TOP = 80; // px — nothing draws above the year timeline
+const CONTENT_TOP = 80;
 
 function buildAmbientLines(ff) {
   const lines = [];
@@ -329,7 +332,7 @@ function buildAmbientLines(ff) {
       const angle = ff.at(cx, cy);
       cx += Math.cos(angle) * CFG.baseSpeed;
       cy += Math.sin(angle) * CFG.baseSpeed;
-      if (cx < 260 || cx > width + 40 || cy < CONTENT_TOP || cy > height + 20) break;
+      if (cx < 262 || cx > width - 5 || cy < CONTENT_TOP || cy > height - 5) break;
       path.push({ x: cx, y: cy });
     }
     if (path.length < 3) continue;
@@ -359,13 +362,15 @@ let bookCenterPaths = [];
 
 function buildBookBundles(ff) {
   bookCenterPaths = [];
-  const allLines = [];
+  const allLines  = [];
+  const maxPages  = Math.max(...processedBooks.map(b => b.pages));
   for (const b of processedBooks) {
     const sx       = b.nx * width;
     const sy       = b.ny * height;
     const numLines = Math.round(map(b.pages, 80, 900, CFG.bundleLinesMin, CFG.bundleLinesMax, true));
     const spread   = map(b.pages, 80, 900, CFG.bundleSpreadMin, CFG.bundleSpreadMax, true);
-    const steps    = Math.round(map(b.pages, 80, 900, CFG.bookStepsMin, CFG.bookStepsMax, true));
+    const stepsBase = Math.round(map(b.pages, 80, 900, CFG.bookStepsMin, CFG.bookStepsMax, true));
+    const steps    = b.pages >= maxPages ? Math.round(stepsBase * 2.8) : stepsBase;
     const jitterStr = b.turbulence;
     const bookSeed  = djb2(b.title) % 1000;
 
@@ -382,21 +387,21 @@ function buildBookBundles(ff) {
       const centerDist = Math.abs(tLi - 0.5) * 2; // 0 = center, 1 = edge
       const alphaScale = map(centerDist, 0, 1, 1.0, 0.42);
 
-      const startX = sx + perpX * offset;
-      const startY = sy + perpY * offset;
+      // Clamp starting position so perpendicular spread never exits the canvas
+      const startX = constrain(sx + perpX * offset, 262, width - 5);
+      const startY = constrain(sy + perpY * offset, CONTENT_TOP + 2, height - 5);
 
       const path = [{ x: startX, y: startY }];
       let cx = startX, cy = startY;
       for (let s = 0; s < steps; s++) {
         let angle = ff.at(cx, cy);
         if (jitterStr > 0) {
-          // Each line in bundle gets a unique noise offset so they diverge naturally
           angle += (noise(cx * 0.018 + bookSeed + li * 0.07, cy * 0.018, s * 0.04) - 0.5)
                    * TWO_PI * 0.5 * jitterStr;
         }
         cx += Math.cos(angle) * CFG.baseSpeed;
         cy += Math.sin(angle) * CFG.baseSpeed;
-        if (cx < 260 || cx > width + 40 || cy < CONTENT_TOP || cy > height + 20) break;
+        if (cx < 262 || cx > width - 5 || cy < 5 || cy > height - 5) break;
         path.push({ x: cx, y: cy });
       }
       if (path.length < 2) continue;
@@ -412,6 +417,7 @@ function buildBookBundles(ff) {
         alpha:    b.alpha * alphaScale * 0.72,
         isDNF:    b.isDNF,
         isCenter,
+        rating:   b.rawRating || 3,
       });
     }
   }
@@ -422,7 +428,7 @@ function drawBookLine({ path, col, alpha, isDNF }) {
   noFill();
   if (isDNF) {
     drawingContext.setLineDash([8, 8]);
-    stroke(col.h, col.s * 0.35, col.b * 0.75, alpha * 0.65);
+    stroke(col.h, col.s * 0.58, col.b * 0.88, alpha);
     strokeWeight(CFG.bookWeight * 0.8);
     beginShape();
     curveVertex(path[0].x, path[0].y);
@@ -432,29 +438,16 @@ function drawBookLine({ path, col, alpha, isDNF }) {
     drawingContext.setLineDash([]);
     return;
   }
-  // Per-segment gradient: tail = dim/saturated, head = bright/near-white
+  // Per-segment gradient: origin = bright/saturated, tail = dim/fades out
   strokeWeight(CFG.bookWeight);
   for (let i = 1; i < path.length; i++) {
-    const t   = i / (path.length - 1);
-    const a   = t * t * alpha;
-    const sat = lerp(col.s * 0.5, col.s * 0.92, t);
-    const bri = lerp(col.b * 0.22, col.b, t);
+    const t    = i / (path.length - 1);
+    const tRev = 1 - t;
+    const a    = tRev * tRev * alpha;
+    const sat  = lerp(col.s * 0.5, col.s * 0.92, tRev);
+    const bri  = lerp(col.b * 0.22, col.b, tRev);
     stroke(col.h, sat, bri, a);
     line(path[i - 1].x, path[i - 1].y, path[i].x, path[i].y);
-  }
-}
-
-function drawBookGlows(bookLines) {
-  for (const { path, col, isDNF, isCenter } of bookLines) {
-    if (isDNF || !isCenter) continue; // only glow the center line of each bundle
-    const h = path[path.length - 1];
-    noFill();
-    stroke(col.h, 18, 100, 40);
-    strokeWeight(6.5);
-    point(h.x, h.y);
-    stroke(0, 0, 100, 72);
-    strokeWeight(2.2);
-    point(h.x, h.y);
   }
 }
 
@@ -496,50 +489,69 @@ function drawGenreLabels() {
 }
 
 function drawYearTimeline() {
-  const allYears = [...new Set(processedBooks.map(b => b.year))].sort((a, b) => a - b);
+  const src = (processedBooks && processedBooks.length)
+    ? processedBooks
+    : (typeof MY_BOOKS !== "undefined" ? MY_BOOKS : []);
+  const allYears = [...new Set(src.map(b => b.year))].sort((a, b) => a - b);
   if (!allYears.length) return;
   const yearMin = allYears[0], yearMax = allYears[allYears.length - 1];
 
   const ty     = 64;
   const xLeft  = 270;
-  const xRight = width - 40;
+  const xRight = width - 200;
 
-  // Horizontal axis line
-  stroke(220, 10, 95, 80);
-  strokeWeight(1.5);
-  line(xLeft, ty, xRight, ty);
-  noStroke();
+  const ctx = drawingContext;
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
 
-  // "YEAR READ" label above the left end
-  fill(0, 0, 100, 100);
-  textAlign(LEFT, BOTTOM);
-  textSize(10);
-  textStyle(NORMAL);
-  text("YEAR READ", xLeft, ty - 8);
+  // Axis line
+  ctx.strokeStyle = "rgba(210, 220, 255, 0.7)";
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(xLeft, ty);
+  ctx.lineTo(xRight, ty);
+  ctx.stroke();
 
-  for (const yr of allYears) {
-    const vx = map(yr, yearMin, yearMax, xLeft, xRight);
+  // Tick marks + year labels centered between consecutive ticks
+  ctx.font         = "12px monospace";
+  ctx.fillStyle    = "rgba(255, 255, 255, 0.88)";
+  ctx.textAlign    = "center";
+  ctx.textBaseline = "bottom";
+
+  for (let i = 0; i < allYears.length; i++) {
+    const vx = map(allYears[i], yearMin, yearMax, xLeft, xRight);
 
     // Tick mark
-    stroke(220, 10, 95, 80);
-    strokeWeight(1.5);
-    line(vx, ty - 8, vx, ty + 8);
-    noStroke();
+    ctx.strokeStyle = "rgba(210, 220, 255, 0.55)";
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(vx, ty - 4);
+    ctx.lineTo(vx, ty + 4);
+    ctx.stroke();
 
-    // Year label below tick — pure white, full opacity
-    fill(0, 0, 100, 100);
-    textAlign(CENTER, TOP);
-    textSize(13);
-    text(yr, vx, ty + 12);
+    // Label goes between this tick and the previous one
+    if (i > 0) {
+      const prevVx = map(allYears[i - 1], yearMin, yearMax, xLeft, xRight);
+      ctx.fillText(String(allYears[i]), (prevVx + vx) / 2, ty - 6);
+    }
   }
+
+  // "YEAR READ"
+//   ctx.font         = "11px monospace";
+//   ctx.fillStyle    = "rgba(255, 255, 255, 0.88)";
+//   ctx.textAlign    = "left";
+//   ctx.textBaseline = "top";
+//   ctx.fillText("YEAR READ", xLeft, ty + 6);
+
+  ctx.restore();
+  noStroke();
 }
 
 // ── Main render ───────────────────────────────────────────────
 
 function render() {
-  const seed = dataHash();
-  randomSeed(seed);
-  noiseSeed(seed);
+  randomSeed(12345);  // fixed — field shape stays stable when books are added
+  noiseSeed(12345);
 
   background(BG.h, BG.s, BG.b);
 
@@ -553,12 +565,22 @@ function render() {
   blendMode(BLEND);
   for (const al of ambientLines) drawAmbientLine(al);
 
-  // 2. Book lines — one per book, data encoded in visual properties
+  // 2. Book lines — rating encoded via opacity + stroke weight
   for (const bl of bookLines) drawBookLine(bl);
 
-  // 3. Head glows (ADD blend so overlapping tips bloom)
+  // 3. Origin dot — small bright point at each book's starting position
   blendMode(ADD);
-  drawBookGlows(bookLines);
+  for (const { path, col, isDNF, isCenter } of bookLines) {
+    if (!isCenter) continue;
+    const h = path[0];
+    noFill();
+    stroke(col.h, 18, 100, isDNF ? 22 : 40);
+    strokeWeight(isDNF ? 4.5 : 6.5);
+    point(h.x, h.y);
+    stroke(0, 0, 100, isDNF ? 45 : 72);
+    strokeWeight(isDNF ? 1.5 : 2.2);
+    point(h.x, h.y);
+  }
 
   // 4. Labels
   blendMode(BLEND);
@@ -568,7 +590,7 @@ function render() {
 // ── p5.js lifecycle ───────────────────────────────────────────
 
 function setup() {
-  createCanvas(1600, 1200);
+  createCanvas(1800, 1200);
   colorMode(HSB, 360, 100, 100, 100);
   noStroke();
   pixelDensity(min(pixelDensity(), 2));
