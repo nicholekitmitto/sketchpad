@@ -355,6 +355,24 @@ function drawAmbientLine({ path }) {
 // Center paths stored for hover detection (one per book)
 let bookCenterPaths = [];
 
+// Laplacian path smoothing — averages each point with its neighbours
+// so sharp corners from flow-field angle changes become gentle curves.
+function smoothPath(pts, iters = 3) {
+  let p = pts;
+  for (let k = 0; k < iters; k++) {
+    const out = [p[0]];
+    for (let i = 1; i < p.length - 1; i++) {
+      out.push({
+        x: (p[i - 1].x + p[i].x * 2 + p[i + 1].x) / 4,
+        y: (p[i - 1].y + p[i].y * 2 + p[i + 1].y) / 4,
+      });
+    }
+    out.push(p[p.length - 1]);
+    p = out;
+  }
+  return p;
+}
+
 // ── Book layer — ribbon bundles (data) ───────────────────────
 // Each book spawns a tight fan of parallel lines seeded perpendicular
 // to the initial flow direction. Pages → ribbon width + line count.
@@ -405,14 +423,15 @@ function buildBookBundles(ff) {
         path.push({ x: cx, y: cy });
       }
       if (path.length < 2) continue;
+      const smoothed = smoothPath(path);
 
       const isCenter = li === Math.floor(numLines / 2);
       if (isCenter) {
-        bookCenterPaths.push({ path, title: b.title, col: b.col, isDNF: b.isDNF });
+        bookCenterPaths.push({ path: smoothed, title: b.title, col: b.col, isDNF: b.isDNF });
       }
 
       allLines.push({
-        path,
+        path:     smoothed,
         col:      b.col,
         alpha:    b.alpha * alphaScale * 0.72,
         isDNF:    b.isDNF,
@@ -625,10 +644,14 @@ function mouseMoved() {
 
   const tip = document.getElementById("book-tooltip");
   if (nearest) {
-    // Keep tooltip inside the right edge
-    const tipX = mouseX + 20 + 200 > windowWidth ? mouseX - 220 : mouseX + 20;
-    tip.style.left    = tipX + "px";
-    tip.style.top     = (mouseY - 12) + "px";
+    const rect   = document.querySelector("canvas").getBoundingClientRect();
+    const scaleX = rect.width  / width;
+    const scaleY = rect.height / height;
+    const sx     = rect.left + mouseX * scaleX;
+    const sy     = rect.top  + mouseY * scaleY;
+    const tipX   = sx + 14 + 200 > windowWidth ? sx - 214 : sx + 14;
+    tip.style.left = tipX + "px";
+    tip.style.top  = (sy - 10) + "px";
     tip.style.display = "block";
     tip.style.borderLeftColor =
       `hsla(${nearest.col.h}, ${Math.round(nearest.col.s * 0.65)}%, ${Math.round(nearest.col.b * 0.72)}%, 0.9)`;
