@@ -380,7 +380,7 @@ const MY_BOOKS = [
   {
     title: "Caraval",
     genre: "Fantasy",
-    rating: 5,
+    rating: 3,
     pages: 407,
     emotionalIntensity: 2,
     year: 2021,

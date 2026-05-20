@@ -180,7 +180,9 @@ function getGenreBandIndex(genre) {
 
 // ── Book processing ───────────────────────────────────────────
 
-let processedBooks = [];
+let processedBooks  = [];
+let yearTurbulence  = new Map(); // year → normalised avg emotional intensity (0–1)
+let yearDensity     = new Map(); // year → normalised book count (0–1)
 
 function processBooks() {
   const raw = (typeof MY_BOOKS !== "undefined")
@@ -198,7 +200,7 @@ function processBooks() {
     // x: year column with small jitter so same-year books naturally overlap neighbours
     const nxBase = (yearMin === yearMax) ? 0.5
                  : map(b.year, yearMin, yearMax, 270 / width, (width - 200) / width);
-    const nxJitter = ((djb2(b.title + "x") % 2000) / 2000 - 0.5) * 60 / width;
+    const nxJitter = ((djb2(b.title + "x") % 2000) / 2000 - 0.72) * 60 / width;
     const nx = constrain(nxBase + nxJitter, 270 / width, (width - 200) / width);
 
     // y: deterministic hash-based scatter — organic spread with no data meaning
@@ -218,8 +220,32 @@ function processBooks() {
       attractStrength: isDNF ? 0 : ratingToStrength(rating),
       turbulence:      map(b.emotionalIntensity ?? 3, 1, 5, 0.0, isDNF ? 0.55 : 1.0),
       alpha:           isDNF ? 42 : map(rating, 1, 5, 14, 98),
+      isFavorite:      b.rating === 5,
     };
   });
+
+  // Average emotional intensity per year → drives regional field turbulence
+  const yGroups = new Map();
+  for (const b of raw) {
+    if (!yGroups.has(b.year)) yGroups.set(b.year, []);
+    yGroups.get(b.year).push(b.emotionalIntensity ?? 3);
+  }
+  yearTurbulence = new Map();
+  for (const [yr, vals] of yGroups) {
+    const avg = vals.reduce((a, v) => a + v, 0) / vals.length;
+    yearTurbulence.set(yr, map(avg, 1, 5, 0, 1));
+  }
+
+  // Books per year → drives noise spatial frequency (dense years = tighter swirling field)
+  const dGroups = new Map();
+  for (const b of raw) dGroups.set(b.year, (dGroups.get(b.year) ?? 0) + 1);
+  const counts = [...dGroups.values()];
+  const cMin = Math.min(...counts), cMax = Math.max(...counts);
+  yearDensity = new Map();
+  for (const [yr, n] of dGroups) {
+    yearDensity.set(yr, cMin === cMax ? 0.5 : map(n, cMin, cMax, 0, 1));
+  }
+
   updateStatsPanel();
 }
 
@@ -268,27 +294,66 @@ class FlowField {
 
   _buildCache() {
     this._bc = processedBooks.map(b => {
-      const aRad = CFG.attractRadius * (0.5 + Math.max(b.attractStrength, 0) * 2.2);
+      const favMult = b.isFavorite ? 1.8 : 1.0;
+      const aRad = CFG.attractRadius * (0.5 + Math.max(b.attractStrength, 0) * 2.2) * favMult;
       const tRad = CFG.turbRadius    * (1.0 + b.turbulence * 0.9);
       return {
         bx: b.nx * width,  by: b.ny * height,
         aRad, aRad2: aRad * aRad,
         tRad, tRad2: tRad * tRad,
-        aStr: b.attractStrength,
+        aStr: b.attractStrength * (b.isFavorite ? 1.5 : 1.0),
         turb: b.turbulence,
         nx: b.nx, ny: b.ny,
       };
     });
+
+    // Per-column lookups: emotional intensity and book density, both keyed by year column
+    const yrs     = [...yearTurbulence.keys()].sort((a, b) => a - b);
+    const yrMin   = yrs[0] ?? 2019;
+    const yrMax   = yrs[yrs.length - 1] ?? 2026;
+    const xLeft   = 270;
+    const xRight  = width - 200;
+
+    const dYrs = [...yearDensity.keys()].sort((a, b) => a - b);
+
+    this._colIntensity = new Float32Array(this.cols);
+    this._colDensity   = new Float32Array(this.cols);
+    for (let c = 0; c < this.cols; c++) {
+      const px  = c * CFG.fieldRes;
+      const yr  = Math.round(map(px, xLeft, xRight, yrMin, yrMax));
+      const cyr = Math.max(yrMin, Math.min(yrMax, yr));
+      this._colIntensity[c] = yearTurbulence.get(cyr) ?? 0.3;
+
+      // Smooth density: interpolate between the two nearest years
+      const yrF = map(px, xLeft, xRight, yrMin, yrMax); // fractional year
+      let d = yearDensity.get(dYrs[0]) ?? 0.3;
+      for (let i = 0; i < dYrs.length - 1; i++) {
+        if (yrF >= dYrs[i] && yrF <= dYrs[i + 1]) {
+          const frac = (yrF - dYrs[i]) / (dYrs[i + 1] - dYrs[i]);
+          const d0 = yearDensity.get(dYrs[i])     ?? 0.3;
+          const d1 = yearDensity.get(dYrs[i + 1]) ?? 0.3;
+          d = d0 + (d1 - d0) * frac;
+          break;
+        }
+      }
+      if (yrF > dYrs[dYrs.length - 1]) d = yearDensity.get(dYrs[dYrs.length - 1]) ?? 0.3;
+      this._colDensity[c] = d;
+    }
   }
 
   update() {
     const s = CFG.noiseScale, r = CFG.fieldRes, t = this.t, bc = this._bc;
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
-        const px = col * r, py = row * r;
+        const px        = col * r, py = row * r;
+        const intensity = this._colIntensity[col]; // 0–1: avg emotional intensity for this year column
+        const density   = this._colDensity[col];   // 0–1: book count for this year column
+        // Base frequency stays uniform across all columns to avoid hard-edge discontinuities.
+        // Dense years → stronger third octave (tighter swirling); sparse years → calm.
         let angle =
           noise(px * s,             py * s,             t       ) * TWO_PI * 2.6
-        + noise(px * s * 2.2 + 400, py * s * 2.2 + 400, t * 1.8) * PI     * 0.5;
+        + noise(px * s * 2.2 + 400, py * s * 2.2 + 400, t * 1.8) * PI * (0.3 + intensity * 1.4)
+        + noise(px * s * 4.8 + 800, py * s * 4.8 + 800, t * 2.4) * PI * density * 1.2;
 
         for (const bc_i of bc) {
           const dx = px - bc_i.bx, dy = py - bc_i.by;
@@ -385,10 +450,12 @@ function buildBookBundles(ff) {
   for (const b of processedBooks) {
     const sx       = b.nx * width;
     const sy       = b.ny * height;
-    const numLines = Math.round(map(b.pages, 80, 900, CFG.bundleLinesMin, CFG.bundleLinesMax, true));
-    const spread   = map(b.pages, 80, 900, CFG.bundleSpreadMin, CFG.bundleSpreadMax, true);
-    const stepsBase = Math.round(map(b.pages, 80, 900, CFG.bookStepsMin, CFG.bookStepsMax, true));
-    const steps    = b.pages >= maxPages ? Math.round(stepsBase * 2.8) : stepsBase;
+    const favMult  = b.isFavorite ? 1.45 : 1.0;
+    const numLines = Math.round(map(b.pages, 80, 900, CFG.bundleLinesMin, CFG.bundleLinesMax, true) * favMult);
+    const spread   = map(b.pages, 80, 900, CFG.bundleSpreadMin, CFG.bundleSpreadMax, true) * (b.isFavorite ? 1.5 : 1.0);
+    const pageT     = Math.sqrt(constrain(map(b.pages, 80, 900, 0, 1), 0, 1));
+    const stepsBase = Math.round(CFG.bookStepsMin + pageT * (CFG.bookStepsMax - CFG.bookStepsMin));
+    const steps     = b.pages >= maxPages ? Math.round(stepsBase * 2.8) : stepsBase;
     const jitterStr = b.turbulence;
     const bookSeed  = djb2(b.title) % 1000;
 
@@ -419,7 +486,7 @@ function buildBookBundles(ff) {
         }
         cx += Math.cos(angle) * CFG.baseSpeed;
         cy += Math.sin(angle) * CFG.baseSpeed;
-        if (cx < 262 || cx > width - 5 || cy < 5 || cy > height - 5) break;
+        if (cx < 0 || cx > width - 5 || cy < 5 || cy > height - 5) break;
         path.push({ x: cx, y: cy });
       }
       if (path.length < 2) continue;
@@ -427,16 +494,17 @@ function buildBookBundles(ff) {
 
       const isCenter = li === Math.floor(numLines / 2);
       if (isCenter) {
-        bookCenterPaths.push({ path: smoothed, title: b.title, col: b.col, isDNF: b.isDNF });
+        bookCenterPaths.push({ path: smoothed, title: b.title, col: b.col, isDNF: b.isDNF, isFavorite: b.isFavorite });
       }
 
       allLines.push({
-        path:     smoothed,
-        col:      b.col,
-        alpha:    b.alpha * alphaScale * 0.72,
-        isDNF:    b.isDNF,
+        path:       smoothed,
+        col:        b.col,
+        alpha:      b.alpha * alphaScale * 0.72,
+        isDNF:      b.isDNF,
         isCenter,
-        rating:   b.rawRating || 3,
+        isFavorite: b.isFavorite,
+        rating:     b.rawRating || 3,
       });
     }
   }
@@ -589,16 +657,28 @@ function render() {
 
   // 3. Origin dot — small bright point at each book's starting position
   blendMode(ADD);
-  for (const { path, col, isDNF, isCenter } of bookLines) {
+  for (const { path, col, isDNF, isCenter, isFavorite } of bookLines) {
     if (!isCenter) continue;
     const h = path[0];
     noFill();
-    stroke(col.h, 18, 100, isDNF ? 22 : 40);
-    strokeWeight(isDNF ? 4.5 : 6.5);
-    point(h.x, h.y);
-    stroke(0, 0, 100, isDNF ? 45 : 72);
-    strokeWeight(isDNF ? 1.5 : 2.2);
-    point(h.x, h.y);
+    if (isFavorite) {
+      stroke(col.h, 8, 100, 28);
+      strokeWeight(16);
+      point(h.x, h.y);
+      stroke(col.h, 18, 100, 52);
+      strokeWeight(9);
+      point(h.x, h.y);
+      stroke(0, 0, 100, 92);
+      strokeWeight(3);
+      point(h.x, h.y);
+    } else {
+      stroke(col.h, 18, 100, 40);
+      strokeWeight(6.5);
+      point(h.x, h.y);
+      stroke(0, 0, 100, 72);
+      strokeWeight(2.2);
+      point(h.x, h.y);
+    }
   }
 
   // 4. Labels
@@ -655,7 +735,7 @@ function mouseMoved() {
     tip.style.display = "block";
     tip.style.borderLeftColor =
       `hsla(${nearest.col.h}, ${Math.round(nearest.col.s * 0.65)}%, ${Math.round(nearest.col.b * 0.72)}%, 0.9)`;
-    tip.textContent = nearest.title + (nearest.isDNF ? "  (DNF)" : "");
+    tip.textContent = nearest.title + (nearest.isFavorite ? "  ★" : "") + (nearest.isDNF ? "  (DNF)" : "");
   } else {
     tip.style.display = "none";
   }
